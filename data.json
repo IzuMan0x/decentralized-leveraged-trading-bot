@@ -1,0 +1,12 @@
+{
+  "address": {
+    "totalTradeCount": 0,
+    "collateralSupplied": 0,
+    "payouts": 0
+  },
+  "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266": {
+    "totalTradeCount": 26,
+    "collateralSupplied": 0,
+    "payouts": 3.7000000000000003e-17
+  }
+}
