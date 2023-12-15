@@ -1,4 +1,16 @@
+//Decided to create two versions of the bot one that will work for both produciton and local network, then one that will only be for production
+//To have all the logs saved in a file run the bot with this command:
+// node bot.js >> log-file.txt
+// node bot.js > log-file.txt ** command will overwrite the log file everytime the bot starts
+
+/* '  ______      _   _          _____             _       ___  ___     
+'  | ___ \    | | | |        |_   _|           | |      |  \/  |     
+'  | |_/ / ___| |_| |_ ___ _ __| |_ __ __ _  __| | ___  | .  . | ___ 
+'  | ___ \/ _ \ __| __/ _ \ '__| | '__/ _` |/ _` |/ _ \ | |\/| |/ _ \
+'  | |_/ /  __/ |_| ||  __/ |  | | | | (_| | (_| |  __/_| |  | |  __/
+'  \____/ \___|\__|\__\___|_|  \_/_|  \__,_|\__,_|\___(_)_|  |_/\___| */
 require("dotenv").config();
+//Pyth library for getting price update data
 const { EvmPriceServiceConnection } = require("@pythnetwork/pyth-evm-js"); // from "@pythnetwork/pyth-evm-js";
 const orderBookData = require("./contract-abi/OrderBook.json");
 const pythNetworkAbi = require("./contract-abi/pyth-network-abi.json");
@@ -10,7 +22,7 @@ const ethers = require("ethers");
 //If you are testing on a LOCAL network like hardhat, ganache etc. (not testnet) set this to true so it will interact with the mock contracts
 const testingBool = process.env.FOR_LOCAL_DEPLOYMENT;
 const maxPriceSlippage = process.env.MAX_PRICE_SLIPPAGE;
-const currentTestingPrices = [1000, 34000, 0.6, 0.7, 221];
+const currentTestingPrices = [909, 34000, 0.6, 0.7, 221];
 const localNetworkPriceIds = [
   "0x000000000000000000000000000000000000000000000000000000000000abcd",
   "0x0000000000000000000000000000000000000000000000000000000000001234",
@@ -18,28 +30,9 @@ const localNetworkPriceIds = [
   "0x000000000000000000000000000000000000000000000000000000000000dcba",
   "0x0000000000000000000000000000000000000000000000000000000000009876",
 ];
-const pairSymbolsArray = [
-  "$ETH/USD",
-  "$BTC/USD",
-  "$XRP/USD",
-  "$MATIC/USD",
-  "$BNB/USD",
-];
-
-//To have all the logs saved in a file run the bot with this command:
-// node bot.js >> log-file.txt
-// node bot.js > log-file.txt ** command will overwrite the log file everytime the bot starts
-
-/* '  ______      _   _          _____             _       ___  ___     
-'  | ___ \    | | | |        |_   _|           | |      |  \/  |     
-'  | |_/ / ___| |_| |_ ___ _ __| |_ __ __ _  __| | ___  | .  . | ___ 
-'  | ___ \/ _ \ __| __/ _ \ '__| | '__/ _` |/ _` |/ _ \ | |\/| |/ _ \
-'  | |_/ /  __/ |_| ||  __/ |  | | | | (_| | (_| |  __/_| |  | |  __/
-'  \____/ \___|\__|\__\___|_|  \_/_|  \__,_|\__,_|\___(_)_|  |_/\___| */
 
 //@dev everything is set to run on a testnet
 //Pyth
-
 const pythNetwork = {
   address: process.env.PYTH_CONTRACT_ADDRESS, //sepolia contract address
   abi: pythNetworkAbi.abi,
@@ -53,13 +46,12 @@ const pythNetwork = {
 const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
 //For signing transactions on the block chain
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-console.log("made it here");
+
 const orderBook = new ethers.Contract(
-  process.env.ORDERBOOK_CONTRACT_ADDRESS,
+  process.env.CONTRACT_ADDRESS,
   orderBookData.abi,
   provider
 );
-
 const pythContract = new ethers.Contract(
   process.env.PYTH_CONTRACT_ADDRESS,
   pythNetwork.abi,
@@ -67,7 +59,7 @@ const pythContract = new ethers.Contract(
 );
 
 const orderBookSigner = new ethers.Contract(
-  process.env.ORDERBOOK_CONTRACT_ADDRESS,
+  process.env.CONTRACT_ADDRESS,
   orderBookData.abi,
   wallet
 );
@@ -276,13 +268,11 @@ const calculateUserPNL = async () => {
       if (orderType == 0) {
         //ignoring borrow fee, later we will consider it if there position is green price wise
 
-        userPNL =
-          collateral - ((openPrice - currentPrice) * leverage) / openPrice;
+        userPNL = collateral - (openPrice - currentPrice) * leverage;
 
         console.log("Made it to the PNL calculation and result is: ", userPNL);
       } else if (orderType == 1) {
-        userPNL =
-          collateral - ((currentPrice - openPrice) * leverage) / openPrice;
+        userPNL = collateral - (currentPrice - openPrice) * leverage;
       }
 
       if (userPNL <= 0) {
@@ -562,7 +552,7 @@ orderBook.on("LimitOrderCanceled", async (userAddress) => {
 ///@dev this function executes a limitOrder after the order details have been checked in the checkingLimitOrders function
 const executeLimitOrder = async (userAddress, pairIndex, limitOrderSlot) => {
   //checking whether if we are in a testing evironment with Mocks etc.
-  if (testingBool === "false") {
+  if (testingBool === "true") {
     //retrieving the price feed call data from the pyth API
     console.log(pairIndex);
     const priceFeedUpdateData = await pythConnection
@@ -572,15 +562,13 @@ const executeLimitOrder = async (userAddress, pairIndex, limitOrderSlot) => {
       });
 
     //reading from the pyth smart contract the current update fee
-    //pythFeedUpdateData use to be [priceFeedUpdateData] which will cause an error
     const pythUpdateFee = await pythContract
-      .getUpdateFee(priceFeedUpdateData)
+      .getUpdateFee([priceFeedUpdateData])
       .catch((err) => {
         console.log("Failed to retrieve pyth update fee", err);
       });
 
     //executing the limit order with the signer account
-    console.log("executing limit order for real....");
     const tx = await orderBookSigner
       .executeLimitOrder(
         userAddress,
@@ -593,7 +581,7 @@ const executeLimitOrder = async (userAddress, pairIndex, limitOrderSlot) => {
         console.log("Executing limit order failed with error: ", err);
       });
 
-    const txR = await tx?.wait(1); // added await here, need to check if this solves the error where we  have a sucessfull trx that is thought to have failed causing the function to be called again
+    const txR = tx.wait(1);
     if ((await txR?.status) == 0) {
       console.log("user limit order unsuccessful");
       return false;
@@ -619,7 +607,6 @@ const executeLimitOrder = async (userAddress, pairIndex, limitOrderSlot) => {
       return false;
     }
   } else {
-    console.log("localhost limit order execution");
     const blockNumber = await provider.getBlockNumber();
     const blockInfo = await provider.getBlock(blockNumber);
     //manually setting the update parameters

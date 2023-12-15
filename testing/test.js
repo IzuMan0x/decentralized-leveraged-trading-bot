@@ -1,6 +1,6 @@
-//This is just for testing random thing
+//This is just for testing random things
 
-const standings = {
+/* const standings = {
   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266": {
     totalTrades: 10,
     totalTradesSize: 10000000,
@@ -17,3 +17,12 @@ console.log("This is the values method");
 
 console.log("this is the key method");
 console.log(Object.keys(standings));
+ */
+
+const { filterUserTotalTrades } = require("../leaderboards/queryTraderData.js");
+const {
+  uploadQueriedDataToFirebase,
+} = require("../firebase/firebase-utils.js");
+
+filterUserTotalTrades().then(() => uploadQueriedDataToFirebase());
+//filterUserTotalTrades();
